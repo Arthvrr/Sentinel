@@ -26,7 +26,7 @@ def main():
     
     if not super_context:
         print("Aucun contexte généré. As-tu fait au moins un commit dans ce repository ?")
-        return
+        sys.exit(1)
 
     print("🧠 Sentinel: Analyse du code en cours par Gemini 3.8 Flash...")
     ai_response = analyze_code(super_context)
