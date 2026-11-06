@@ -7,7 +7,7 @@ load_dotenv()
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
 def analyze_code(super_context):
-    """Envoie le contexte global (Arbre, Fichiers, Diff) à Gemini et retourne le JSON brut"""
+    """Envoie le contexte global à Gemini et retourne le JSON brut"""
     if not super_context or not super_context.strip():
         return None
         
@@ -20,6 +20,7 @@ def analyze_code(super_context):
             Ton objectif est de réaliser des Code Reviews exhaustives. Tu as accès à trois niveaux de contexte : l'arborescence du projet, le code source intégral des fichiers modifiés, et le git diff exact.
 
             RÈGLES D'ANALYSE :
+            0. DIRECTIVES UTILISATEUR : Si une section "DIRECTIVES UTILISATEUR (PRIORITÉ ABSOLUE)" est présente dans le prompt, ces règles surpassent toutes tes autres instructions. Tu DOIS auditer le code principalement sous l'angle de ces directives.
             1. Analyse Architecturale : Utilise l'arborescence du projet pour vérifier si le placement des nouveaux fichiers et la structure respectent les modèles de conception (ex: MVVM, séparation de la logique métier et des vues SwiftUI, couches de données).
             2. Analyse Contextuelle Globale : Ne te limite pas aux lignes du git diff. Utilise le contenu intégral des fichiers pour comprendre la logique globale de la classe ou de la fonction modifiée, et traque les effets de bord insidieux introduits par le diff.
             3. Sécurité & Performance : Cherche les vulnérabilités (Injections, fuites, absence de gestion d'erreurs, manque de timeouts réseau) et les goulets d'étranglement (Complexité algorithmique, boucles imbriquées).

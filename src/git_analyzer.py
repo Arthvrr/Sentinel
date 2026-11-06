@@ -5,7 +5,6 @@ def generate_project_tree(startpath='.', exclude_dirs={'.git', '__pycache__', 'v
     """Dessine l'arborescence du projet pour que Gemini comprenne la structure."""
     tree_str = "Architecture du répertoire :\n"
     for root, dirs, files in os.walk(startpath):
-        # On modifie la liste des dossiers "en place" pour ne pas scanner les dossiers inutiles
         dirs[:] = [d for d in dirs if d not in exclude_dirs]
         
         level = root.replace(startpath, '').count(os.sep)
@@ -22,25 +21,34 @@ def generate_project_tree(startpath='.', exclude_dirs={'.git', '__pycache__', 'v
     return tree_str
 
 def get_context_for_gemini():
-    """Récupère l'arbre du projet, le diff, et le code source des fichiers modifiés."""
+    """Récupère l'arbre du projet, les règles utilisateur, le diff, et le code source."""
     
     # 1. Obtenir l'arborescence du projet
     project_tree = generate_project_tree()
 
-    # 2. Obtenir le Git Diff
+    # 2. Chercher les instructions personnalisées de l'utilisateur
+    custom_rules = ""
+    sentinel_file = "SENTINEL.md"
+    if os.path.exists(sentinel_file):
+        with open(sentinel_file, 'r', encoding='utf-8') as f:
+            content = f.read().strip()
+            if content:
+                custom_rules = f"\n## DIRECTIVES UTILISATEUR (PRIORITÉ ABSOLUE)\n{content}\n"
+
+    # 3. Obtenir le Git Diff
     try:
         diff = subprocess.run(['git', 'diff', 'HEAD~1', 'HEAD'], capture_output=True, text=True, check=True).stdout
     except subprocess.CalledProcessError:
          return None
 
-    # 3. Trouver les fichiers modifiés
+    # 4. Trouver les fichiers modifiés
     try:
         files_changed_raw = subprocess.run(['git', 'diff', '--name-only', 'HEAD~1', 'HEAD'], capture_output=True, text=True, check=True).stdout
         files_changed = files_changed_raw.strip().split('\n')
     except subprocess.CalledProcessError:
         files_changed = []
 
-    # 4. Lire le contenu complet de ces fichiers modifiés
+    # 5. Lire le contenu complet de ces fichiers modifiés
     full_files_content = ""
     for filepath in files_changed:
         if filepath and os.path.exists(filepath) and not filepath.endswith(('.xcf', '.png', '.jpg', '.pyc', '.DS_Store')):
@@ -49,8 +57,9 @@ def get_context_for_gemini():
                 full_files_content += f.read()
                 full_files_content += "\n----------------------------------------\n"
 
-    # 5. Le Super Prompt (Contexte ultime)
+    # 6. Le Super Prompt (Contexte ultime avec les règles utilisateur en premier)
     super_context = f"""
+{custom_rules}
 ## ARCHITECTURE GLOBALE DU PROJET
 {project_tree}
 
