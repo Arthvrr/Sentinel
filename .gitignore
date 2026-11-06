@@ -3,4 +3,5 @@ venv/
 src/*.pyc__pycache__/
 *.pyc
 .DS_Store
-*.pem*.xcf
+*.pem
+*.xcf

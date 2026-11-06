@@ -5,7 +5,7 @@ from github_client import post_commit_comment
 
 def main():
     print("🔍 Sentinel: Récupération du dernier commit...")
-    diff = get_latest_commit_diff()
+    diff = get_context_for_gemini()
     
     if not diff:
         print("Aucun diff trouvé. As-tu fait au moins un commit dans ce repository ?")

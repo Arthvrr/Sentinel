@@ -1,0 +1,21 @@
+name: Sentinel AI Code Review
+
+on: [push]
+
+permissions:
+  contents: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout du code cible
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Exécuter Sentinel AI
+        uses: Arthvrr/Sentinel@master 
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}

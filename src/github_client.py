@@ -37,7 +37,7 @@ def get_app_installation_token():
     owner, repo_name = repo.split("/")
     
     install_url = f"https://api.github.com/repos/{owner}/{repo_name}/installation"
-    response = requests.get(install_url, headers=headers)
+    response = requests.get(install_url, headers=headers,timeout=10)
     
     if response.status_code != 200:
         print(f"❌ Erreur lors de la récupération de l'installation : {response.text}")
@@ -47,7 +47,7 @@ def get_app_installation_token():
 
     # 3. Demander un token d'accès pour cette installation
     token_url = f"https://api.github.com/app/installations/{installation_id}/access_tokens"
-    token_response = requests.post(token_url, headers=headers)
+    token_response = requests.post(token_url, headers=headers,timeout=10)
     
     if token_response.status_code != 201:
          print(f"❌ Erreur lors de la création du token d'accès : {token_response.text}")
@@ -85,11 +85,12 @@ def post_commit_comment(report_json):
         for issue in issues:
             severity_icon = "🔴" if issue.get('severity') == "high" else "🟠" if issue.get('severity') == "medium" else "🔵"
             
-            markdown_body += f"<details>\n"
-            markdown_body += f"<summary>{severity_icon} <b>[{issue.get('severity', 'N/A').upper()}] Ligne {issue.get('line', 'N/A')}</b> - {issue.get('type', 'Général')}</summary>\n\n"
+            # Formatage brut en Markdown, sans balises HTML <details>
+            markdown_body += f"#### {severity_icon} [{issue.get('severity', 'N/A').upper()}] Ligne {issue.get('line', 'N/A')} - {issue.get('type', 'Général')}\n"
             markdown_body += f"- **Description** : {issue.get('description', '')}\n"
             markdown_body += f"- **Suggestion** : `{issue.get('suggestion', '')}`\n\n"
-            markdown_body += f"</details>\n\n"
+            
+    markdown_body += "---\n*🤖 Code review générée automatiquement par **Sentinel** (Gemini 3.8 Flash).*"
             
     markdown_body += "---\n*🤖 Code review générée automatiquement par **Sentinel** (Gemini 3.8 Flash).*"
 
@@ -100,7 +101,7 @@ def post_commit_comment(report_json):
     }
     data = {"body": markdown_body}
 
-    response = requests.post(url, headers=headers, json=data)
+    response = requests.post(url, headers=headers, json=data,timeout=10)
     
     if response.status_code == 201:
         print(f"✅ Commentaire publié avec succès sur le commit {commit_sha[:7]} en tant que GitHub App !")
