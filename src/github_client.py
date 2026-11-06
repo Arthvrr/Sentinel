@@ -91,8 +91,6 @@ def post_commit_comment(report_json):
             markdown_body += f"- **Suggestion** : `{issue.get('suggestion', '')}`\n\n"
             
     markdown_body += "---\n*🤖 Code review générée automatiquement par **Sentinel** (Gemini 3.8 Flash).*"
-            
-    markdown_body += "---\n*🤖 Code review générée automatiquement par **Sentinel** (Gemini 3.8 Flash).*"
 
     url = f"https://api.github.com/repos/{repo}/commits/{commit_sha}/comments"
     headers = {
