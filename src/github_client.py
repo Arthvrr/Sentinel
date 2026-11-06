@@ -1,40 +1,98 @@
 import os
 import requests
 import json
+import time
+import jwt
+
+def get_app_installation_token():
+    """Génère un token d'accès temporaire pour la GitHub App."""
+    
+    app_id = os.environ.get("SENTINEL_APP_ID")
+    private_key_pem = os.environ.get("SENTINEL_PRIVATE_KEY")
+    repo = os.environ.get("GITHUB_REPOSITORY")  # ex: Arthvrr/Sentinel
+    
+    if not all([app_id, private_key_pem, repo]):
+        print("⚠️ Variables d'environnement de la GitHub App manquantes.")
+        return None
+
+    # 1. Créer le JWT (JSON Web Token)
+    now = int(time.time())
+    payload = {
+        "iat": now - 60, # Émis il y a 60 secondes pour pallier les décalages d'horloge
+        "exp": now + (10 * 60), # Expire dans 10 minutes (maximum autorisé)
+        "iss": app_id
+    }
+    
+    try:
+        encoded_jwt = jwt.encode(payload, private_key_pem, algorithm="RS256")
+    except Exception as e:
+        print(f"❌ Erreur lors de la signature du JWT : {e}")
+        return None
+
+    # 2. Récupérer l'ID d'installation pour le repository actuel
+    headers = {
+        "Authorization": f"Bearer {encoded_jwt}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    owner, repo_name = repo.split("/")
+    
+    install_url = f"https://api.github.com/repos/{owner}/{repo_name}/installation"
+    response = requests.get(install_url, headers=headers)
+    
+    if response.status_code != 200:
+        print(f"❌ Erreur lors de la récupération de l'installation : {response.text}")
+        return None
+        
+    installation_id = response.json().get("id")
+
+    # 3. Demander un token d'accès pour cette installation
+    token_url = f"https://api.github.com/app/installations/{installation_id}/access_tokens"
+    token_response = requests.post(token_url, headers=headers)
+    
+    if token_response.status_code != 201:
+         print(f"❌ Erreur lors de la création du token d'accès : {token_response.text}")
+         return None
+         
+    return token_response.json().get("token")
+
 
 def post_commit_comment(report_json):
     """Publie l'analyse de Sentinel en tant que commentaire sur le commit."""
     
-    # GitHub Actions fournit automatiquement ces variables d'environnement
-    token = os.environ.get("GITHUB_TOKEN")
-    repo = os.environ.get("GITHUB_REPOSITORY")  # ex: Arthvrr/Sentinel
-    commit_sha = os.environ.get("GITHUB_SHA")   # Le hash du commit actuel
+    repo = os.environ.get("GITHUB_REPOSITORY") 
+    commit_sha = os.environ.get("GITHUB_SHA")
+    
+    # Nouvelle méthode d'authentification
+    token = get_app_installation_token()
     
     if not all([token, repo, commit_sha]):
-        print("⚠️ Variables d'environnement GitHub manquantes. Mode local détecté.")
+        print("⚠️ Impossible de poster : informations ou token manquants.")
         return False
 
-    # Transformer le JSON de Gemini en un beau message Markdown
     try:
         report = json.loads(report_json)
     except json.JSONDecodeError:
         print("⚠️ Erreur : Le rapport de Gemini n'est pas un JSON valide.")
         return False
 
-    markdown_body = f"## 🦅 Sentinel AI Review\n\n**Résumé** : {report.get('summary', 'Analyse terminée.')}\n\n"
+    markdown_body = f"""## 🦅 Sentinel AI Code Review\n\n> **Résumé :** {report.get('summary', 'Analyse terminée.')}\n\n"""
     
     issues = report.get('issues', [])
     if not issues:
-        markdown_body += "✅ **Aucun problème détecté ! Beau travail.**"
+        markdown_body += "✅ **Aucun problème détecté ! Beau travail.**\n"
     else:
-        markdown_body += f"⚠️ **{len(issues)} problème(s) trouvé(s)** :\n\n"
+        markdown_body += f"### ⚠️ {len(issues)} point(s) d'attention\n\n"
         for issue in issues:
             severity_icon = "🔴" if issue.get('severity') == "high" else "🟠" if issue.get('severity') == "medium" else "🔵"
-            markdown_body += f"### {severity_icon} [{issue.get('severity', 'N/A').upper()}] Ligne {issue.get('line', 'N/A')} - {issue.get('type', 'Général')}\n"
+            
+            markdown_body += f"<details>\n"
+            markdown_body += f"<summary>{severity_icon} <b>[{issue.get('severity', 'N/A').upper()}] Ligne {issue.get('line', 'N/A')}</b> - {issue.get('type', 'Général')}</summary>\n\n"
             markdown_body += f"- **Description** : {issue.get('description', '')}\n"
             markdown_body += f"- **Suggestion** : `{issue.get('suggestion', '')}`\n\n"
+            markdown_body += f"</details>\n\n"
+            
+    markdown_body += "---\n*🤖 Code review générée automatiquement par **Sentinel** (Gemini 3.8 Flash).*"
 
-    # Préparation de la requête vers l'API GitHub
     url = f"https://api.github.com/repos/{repo}/commits/{commit_sha}/comments"
     headers = {
         "Authorization": f"Bearer {token}",
@@ -42,11 +100,10 @@ def post_commit_comment(report_json):
     }
     data = {"body": markdown_body}
 
-    # Envoi du commentaire
     response = requests.post(url, headers=headers, json=data)
     
     if response.status_code == 201:
-        print(f"✅ Commentaire publié avec succès sur le commit {commit_sha[:7]} !")
+        print(f"✅ Commentaire publié avec succès sur le commit {commit_sha[:7]} en tant que GitHub App !")
         return True
     else:
         print(f"❌ Erreur lors de la publication : {response.status_code}")

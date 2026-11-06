@@ -31,5 +31,6 @@ jobs:
       - name: Run Sentinel Analysis
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SENTINEL_APP_ID: ${{ secrets.SENTINEL_APP_ID }}
+          SENTINEL_PRIVATE_KEY: ${{ secrets.SENTINEL_PRIVATE_KEY }}
         run: python src/main.py

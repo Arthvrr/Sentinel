@@ -1,0 +1,3 @@
+- créer une GitHub app
+- intégrer Sentinel à mes autres repositories (--> dire dans les paramètres de la GitHub ce dont Sentinel à accès comme repository)
+- ajouter Sentinel aussi aux pulls requests, et autres actions du repo
