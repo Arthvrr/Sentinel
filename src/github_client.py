@@ -1,25 +1,22 @@
 import os
 import requests
-import json
 import time
 import jwt
 
 def get_app_installation_token():
-    """Génère un token d'accès temporaire pour la GitHub App."""
-    
+    # ... (Garde la fonction get_app_installation_token exactement comme elle est) ...
     app_id = os.environ.get("SENTINEL_APP_ID")
     private_key_pem = os.environ.get("SENTINEL_PRIVATE_KEY")
-    repo = os.environ.get("GITHUB_REPOSITORY")  # ex: Arthvrr/Sentinel
+    repo = os.environ.get("GITHUB_REPOSITORY") 
     
     if not all([app_id, private_key_pem, repo]):
         print("⚠️ Variables d'environnement de la GitHub App manquantes.")
         return None
 
-    # 1. Créer le JWT (JSON Web Token)
     now = int(time.time())
     payload = {
-        "iat": now - 60, # Émis il y a 60 secondes pour pallier les décalages d'horloge
-        "exp": now + (10 * 60), # Expire dans 10 minutes (maximum autorisé)
+        "iat": now - 60,
+        "exp": now + (10 * 60),
         "iss": app_id
     }
     
@@ -29,7 +26,6 @@ def get_app_installation_token():
         print(f"❌ Erreur lors de la signature du JWT : {e}")
         return None
 
-    # 2. Récupérer l'ID d'installation pour le repository actuel
     headers = {
         "Authorization": f"Bearer {encoded_jwt}",
         "Accept": "application/vnd.github.v3+json"
@@ -37,7 +33,7 @@ def get_app_installation_token():
     owner, repo_name = repo.split("/")
     
     install_url = f"https://api.github.com/repos/{owner}/{repo_name}/installation"
-    response = requests.get(install_url, headers=headers,timeout=10)
+    response = requests.get(install_url, headers=headers, timeout=10)
     
     if response.status_code != 200:
         print(f"❌ Erreur lors de la récupération de l'installation : {response.text}")
@@ -45,9 +41,8 @@ def get_app_installation_token():
         
     installation_id = response.json().get("id")
 
-    # 3. Demander un token d'accès pour cette installation
     token_url = f"https://api.github.com/app/installations/{installation_id}/access_tokens"
-    token_response = requests.post(token_url, headers=headers,timeout=10)
+    token_response = requests.post(token_url, headers=headers, timeout=10)
     
     if token_response.status_code != 201:
          print(f"❌ Erreur lors de la création du token d'accès : {token_response.text}")
@@ -56,12 +51,11 @@ def get_app_installation_token():
     return token_response.json().get("token")
 
 
-def post_commit_comment(report: dict):
+def post_commit_comment(report: dict) -> bool:
     """Publie l'analyse de Sentinel en tant que commentaire sur le commit."""
     
     repo = os.environ.get("GITHUB_REPOSITORY") 
     commit_sha = os.environ.get("GITHUB_SHA")
-    
     token = get_app_installation_token()
     
     if not all([token, repo, commit_sha]):
@@ -70,8 +64,7 @@ def post_commit_comment(report: dict):
 
     markdown_body = f"""## 🦅 Sentinel AI Code Review\n\n> **Résumé :** {report.get('summary', 'Analyse terminée.')}\n\n"""
     
-    # Ajout du feedback architectural global s'il existe
-    if 'architecture_feedback' in report:
+    if 'architecture_feedback' in report and report['architecture_feedback']:
         markdown_body += f"### 🏛️ Feedback Architecture\n{report['architecture_feedback']}\n\n"
     
     issues = report.get('issues', [])
@@ -81,12 +74,17 @@ def post_commit_comment(report: dict):
         markdown_body += f"### ⚠️ {len(issues)} point(s) d'attention\n\n"
         for issue in issues:
             severity = issue.get('severity', 'low').lower()
-            # Ajout de la gestion du niveau "critical"
             severity_icon = "🚨" if severity == "critical" else "🔴" if severity == "high" else "🟠" if severity == "medium" else "🔵"
             
             markdown_body += f"#### {severity_icon} [{severity.upper()}] Ligne {issue.get('line', 'N/A')} - {issue.get('title', issue.get('type', 'Général'))}\n"
             markdown_body += f"- **Description** : {issue.get('description', '')}\n"
-            markdown_body += f"- **Suggestion** : `{issue.get('suggestion', '')}`\n\n"
+            
+            # Correction Markdown pour les suggestions multi-lignes
+            suggestion_text = issue.get('suggestion', '').strip()
+            if '\n' in suggestion_text:
+                markdown_body += f"- **Suggestion** :\n```text\n{suggestion_text}\n```\n\n"
+            else:
+                markdown_body += f"- **Suggestion** : `{suggestion_text}`\n\n"
             
     markdown_body += "---\n*🤖 Code review générée automatiquement par **Sentinel** (Gemini 3.8 Flash).*"
 
