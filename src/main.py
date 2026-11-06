@@ -1,10 +1,11 @@
 import json
+import sys
 from git_analyzer import get_context_for_gemini
 from ai_reviewer import analyze_code
 from github_client import post_commit_comment
 
 def main():
-    print("🔍 Sentinel: Récupération du dernier commit...")
+    print("🔍 Sentinel: Récupération du contexte et du dernier commit...")
     super_context = get_context_for_gemini()
     
     if not super_context:
@@ -15,17 +16,21 @@ def main():
     ai_response = analyze_code(super_context)
     
     if ai_response:
-        # On affiche dans le terminal pour le debug local
         try:
+            # On parse le JSON une seule et unique fois ici
             report = json.loads(ai_response)
-            print(f"\n✅ Résumé : {report['summary']}")
+            
+            print(f"\n✅ Résumé : {report.get('summary', 'Terminé.')}")
             print(f"⚠️ {len(report.get('issues', []))} problème(s) trouvé(s).")
             
-            # On tente de publier sur GitHub
             print("\n📡 Tentative de publication sur GitHub...")
-            post_commit_comment(ai_response)
-        except json.JSONDecodeError:
-             print("Erreur de décodage JSON de la réponse de l'IA")
+            # On transmet le dictionnaire Python directement, pas le texte brut
+            post_commit_comment(report)
+            
+        except json.JSONDecodeError as err:
+            # On tue le process proprement pour que GitHub Actions affiche "Failed"
+            print(f"❌ Erreur critique : le modèle n'a pas renvoyé un JSON valide.\n{err}", file=sys.stderr)
+            sys.exit(1)
 
 if __name__ == "__main__":
     main()

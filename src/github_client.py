@@ -56,26 +56,23 @@ def get_app_installation_token():
     return token_response.json().get("token")
 
 
-def post_commit_comment(report_json):
+def post_commit_comment(report: dict):
     """Publie l'analyse de Sentinel en tant que commentaire sur le commit."""
     
     repo = os.environ.get("GITHUB_REPOSITORY") 
     commit_sha = os.environ.get("GITHUB_SHA")
     
-    # Nouvelle méthode d'authentification
     token = get_app_installation_token()
     
     if not all([token, repo, commit_sha]):
         print("⚠️ Impossible de poster : informations ou token manquants.")
         return False
 
-    try:
-        report = json.loads(report_json)
-    except json.JSONDecodeError:
-        print("⚠️ Erreur : Le rapport de Gemini n'est pas un JSON valide.")
-        return False
-
     markdown_body = f"""## 🦅 Sentinel AI Code Review\n\n> **Résumé :** {report.get('summary', 'Analyse terminée.')}\n\n"""
+    
+    # Ajout du feedback architectural global s'il existe
+    if 'architecture_feedback' in report:
+        markdown_body += f"### 🏛️ Feedback Architecture\n{report['architecture_feedback']}\n\n"
     
     issues = report.get('issues', [])
     if not issues:
@@ -83,10 +80,11 @@ def post_commit_comment(report_json):
     else:
         markdown_body += f"### ⚠️ {len(issues)} point(s) d'attention\n\n"
         for issue in issues:
-            severity_icon = "🔴" if issue.get('severity') == "high" else "🟠" if issue.get('severity') == "medium" else "🔵"
+            severity = issue.get('severity', 'low').lower()
+            # Ajout de la gestion du niveau "critical"
+            severity_icon = "🚨" if severity == "critical" else "🔴" if severity == "high" else "🟠" if severity == "medium" else "🔵"
             
-            # Formatage brut en Markdown, sans balises HTML <details>
-            markdown_body += f"#### {severity_icon} [{issue.get('severity', 'N/A').upper()}] Ligne {issue.get('line', 'N/A')} - {issue.get('type', 'Général')}\n"
+            markdown_body += f"#### {severity_icon} [{severity.upper()}] Ligne {issue.get('line', 'N/A')} - {issue.get('title', issue.get('type', 'Général'))}\n"
             markdown_body += f"- **Description** : {issue.get('description', '')}\n"
             markdown_body += f"- **Suggestion** : `{issue.get('suggestion', '')}`\n\n"
             
@@ -99,7 +97,7 @@ def post_commit_comment(report_json):
     }
     data = {"body": markdown_body}
 
-    response = requests.post(url, headers=headers, json=data,timeout=10)
+    response = requests.post(url, headers=headers, json=data, timeout=10)
     
     if response.status_code == 201:
         print(f"✅ Commentaire publié avec succès sur le commit {commit_sha[:7]} en tant que GitHub App !")
