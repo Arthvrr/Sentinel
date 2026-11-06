@@ -79,8 +79,14 @@ def post_commit_comment(report: dict) -> bool:
             markdown_body += f"#### {severity_icon} [{severity.upper()}] Ligne {issue.get('line', 'N/A')} - {issue.get('title', issue.get('type', 'Général'))}\n"
             markdown_body += f"- **Description** : {issue.get('description', '')}\n"
             
-            # Correction Markdown pour les suggestions multi-lignes
+            # Nettoyage anti-bug Markdown : suppression des backticks hallucinés par le LLM
             suggestion_text = issue.get('suggestion', '').strip()
+            if suggestion_text.startswith('```'):
+                lines = suggestion_text.split('\n')
+                if lines[0].startswith('```'): lines = lines[1:]
+                if lines and lines[-1].startswith('```'): lines = lines[:-1]
+                suggestion_text = '\n'.join(lines).strip()
+            
             if '\n' in suggestion_text:
                 markdown_body += f"- **Suggestion** :\n```text\n{suggestion_text}\n```\n\n"
             else:
