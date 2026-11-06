@@ -1,6 +1,7 @@
-import json #Imports
+import json
 from git_analyzer import get_latest_commit_diff
 from ai_reviewer import analyze_code
+from github_client import post_commit_comment
 
 def main():
     print("🔍 Sentinel: Récupération du dernier commit...")
@@ -14,19 +15,14 @@ def main():
     ai_response = analyze_code(diff)
     
     if ai_response:
-        # On transforme le texte JSON en dictionnaire Python
+        # On affiche dans le terminal pour le debug local
         report = json.loads(ai_response)
         print(f"\n✅ Résumé : {report['summary']}")
+        print(f"⚠️ {len(report.get('issues', []))} problème(s) trouvé(s).")
         
-        issues = report.get('issues', [])
-        if not issues:
-            print("🎉 Aucun problème détecté ! Beau travail.")
-        else:
-            print(f"⚠️ {len(issues)} problème(s) trouvé(s) :\n")
-            for issue in issues:
-                print(f"[{issue['severity'].upper()}] Ligne {issue.get('line', 'N/A')} - {issue['type']}")
-                print(f"Description : {issue['description']}")
-                print(f"Suggestion  : {issue['suggestion']}\n")
+        # On tente de publier sur GitHub
+        print("\n📡 Tentative de publication sur GitHub...")
+        post_commit_comment(ai_response)
 
 if __name__ == "__main__":
     main()

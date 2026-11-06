@@ -7,6 +7,13 @@ on:
       - main
   pull_request:
 
+permissions:
+  contents: read
+  commit-statuses: write # Ajoute cette ligne si nécessaire selon les orgs
+# Change contents: read en contents: write
+permissions:
+  contents: write
+
 jobs:
   review:
     runs-on: ubuntu-latest
@@ -14,7 +21,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2 # Indispensable : récupère le commit précédent pour pouvoir faire le git diff
+          fetch-depth: 0 # Historique complet pour les PRs !
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -24,9 +31,12 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install google-genai python-dotenv
+          pip install -r requirements.txt
 
       - name: Run Sentinel Analysis
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python src/main.py
+
+
+        
