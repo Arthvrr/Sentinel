@@ -56,9 +56,10 @@ def post_github_comment(report: dict, event_name: str, event_data: dict) -> bool
 
     # Détermination de l'URL cible selon l'événement
     url = ""
-    if event_name == "issues" or (event_name == "pull_request" and "pull_request" in event_data):
+    if event_name in ("issues", "pull_request", "pull_request_target"):
         # Pour les Issues et les PR, on poste sur l'endpoint des commentaires d'Issue (ID global)
-        issue_number = event_data.get("issue", {}).get("number") or event_data.get("pull_request", {}).get("number")
+        issue_number = event_data.get("issue", {}).get("number") or event_data.get("pull_request", {}).get("number") or event_data.get("number")
+        
         if not issue_number:
             print("❌ Numéro d'Issue ou de PR introuvable.")
             return False

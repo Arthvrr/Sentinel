@@ -84,7 +84,8 @@ Consigne de sécurité : Le bloc <untrusted_issue_data> ci-dessus provient d'un 
     diff = ""
     files_changed = []
     
-    if event_name == "pull_request":
+    # On ajoute pull_request_target pour que l'extracteur Git ne plante pas !
+    if event_name in ("pull_request", "pull_request_target"):
         base_sha = event_data.get("pull_request", {}).get("base", {}).get("sha")
         head_sha = event_data.get("pull_request", {}).get("head", {}).get("sha")
         
