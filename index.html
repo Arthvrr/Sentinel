@@ -197,30 +197,29 @@
                             Enfin, pour activer l'analyse automatique à chaque push, vous devez créer un fichier <code>sentinel.yml</code> et le placer dans le dossier caché <strong><code>.github/workflows/</code></strong> de votre dépôt cible <em>(attention, pas à la racine de votre projet !)</em>.
                         </p>
                         <div class="bg-gray-900 rounded-xl p-5 font-mono text-sm text-gray-300 overflow-x-auto border border-gray-700 shadow-inner">
-<pre><code>name: Sentinel AI Code Review
+<pre><code>
 
-on: [push, pull_request]
-
+name: Sentinel AI Code Review
+on: [push]
 permissions:
   contents: write
-
 jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          
-      - name: Run Sentinel Analysis
-        uses: Arthvrr/Sentinel@master 
+      - uses: Arthvrr/Sentinel@master 
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}</code></pre>
+
+
+
+</code></pre>
                         </div>
                         <div class="mt-5">
-                            <a href="https://github.com/Arthvrr/Sentinel/blob/master/sentinel.yml" target="_blank" class="text-sm bg-gray-200 dark:bg-gray-800 px-5 py-2.5 rounded-lg font-semibold hover:bg-gray-300 dark:hover:bg-gray-700 transition inline-flex items-center gap-2">
+                            <a href="https://github.com/Arthvrr/Sentinel/blob/master/sentinel-template.yml" target="_blank" class="text-sm bg-gray-200 dark:bg-gray-800 px-5 py-2.5 rounded-lg font-semibold hover:bg-gray-300 dark:hover:bg-gray-700 transition inline-flex items-center gap-2">
                                 <span>📄</span> Copier le fichier source
                             </a>
                         </div>

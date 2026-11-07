@@ -50,8 +50,6 @@ def post_commit_comment(report: dict) -> bool:
     
     repo = os.environ.get("GITHUB_REPOSITORY") 
     commit_sha = os.environ.get("GITHUB_SHA")
-    
-    # Appel de notre nouvelle fonction intelligente
     token = get_auth_token()
     
     if not all([token, repo, commit_sha]):
@@ -69,13 +67,18 @@ def post_commit_comment(report: dict) -> bool:
     else:
         markdown_body += f"### ⚠️ {len(issues)} point(s) d'attention\n\n"
         for issue in issues:
-            severity = issue.get('severity', 'low').lower()
+            severity = (issue.get('severity') or 'low').lower()
             severity_icon = "🚨" if severity == "critical" else "🔴" if severity == "high" else "🟠" if severity == "medium" else "🔵"
             
-            markdown_body += f"#### {severity_icon} [{severity.upper()}] Ligne {issue.get('line', 'N/A')} - {issue.get('title', issue.get('type', 'Général'))}\n"
-            markdown_body += f"- **Description** : {issue.get('description', '')}\n"
+            title = issue.get('title') or issue.get('type') or 'Général'
+            markdown_body += f"#### {severity_icon} [{severity.upper()}] Ligne {issue.get('line', 'N/A')} - {title}\n"
             
-            suggestion_text = issue.get('suggestion', '').strip()
+            description = issue.get('description') or ''
+            markdown_body += f"- **Description** : {description}\n"
+            
+            # Correction de l'AttributeError potentiel (NoneType)
+            suggestion_text = (issue.get('suggestion') or '').strip()
+            
             if suggestion_text.startswith('```'):
                 lines = suggestion_text.split('\n')
                 if lines[0].startswith('```'): lines = lines[1:]
@@ -89,19 +92,27 @@ def post_commit_comment(report: dict) -> bool:
             
     markdown_body += "---\n*🤖 Code review générée automatiquement par **Sentinel** (Gemini 3.8 Flash).*"
 
-    url = f"https://api.github.com/repos/{repo}/commits/{commit_sha}/comments"
+    # Tronquer le commentaire si la limite de l'API GitHub est atteinte
+    MAX_GITHUB_COMMENT_LENGTH = 65000
+    if len(markdown_body) > MAX_GITHUB_COMMENT_LENGTH:
+        markdown_body = markdown_body[:MAX_GITHUB_COMMENT_LENGTH] + "\n\n⚠️ *[Commentaire tronqué : volume maximal autorisé par GitHub (65536 octets) atteint]*"
+
+    url = f"[https://api.github.com/repos/](https://api.github.com/repos/){repo}/commits/{commit_sha}/comments"
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github.v3+json"
     }
     data = {"body": markdown_body}
 
-    response = requests.post(url, headers=headers, json=data, timeout=10)
-    
-    if response.status_code == 201:
-        print(f"✅ Commentaire publié avec succès sur le commit {commit_sha[:7]} !")
-        return True
-    else:
-        print(f"❌ Erreur lors de la publication : {response.status_code}")
-        print(response.text)
+    # Sécurisation des appels réseau avec try/except
+    try:
+        response = requests.post(url, headers=headers, json=data, timeout=10)
+        if response.status_code == 201:
+            print(f"✅ Commentaire publié avec succès sur le commit {commit_sha[:7]} !")
+            return True
+        else:
+            print(f"❌ Erreur lors de la publication : {response.status_code}\n{response.text}")
+            return False
+    except requests.RequestException as exc:
+        print(f"❌ Échec réseau lors de la publication du commentaire : {exc}")
         return False
