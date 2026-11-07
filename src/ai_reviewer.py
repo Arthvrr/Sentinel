@@ -22,6 +22,19 @@ class ReviewReport(BaseModel):
     architecture_feedback: Optional[str] = None
     issues: List[Issue] = Field(default_factory=list)
 
+# --- NOUVELLE FONCTION DE NETTOYAGE ---
+def clean_schema(schema):
+    """Supprime récursivement les clés 'title' insérées par Pydantic que Gemini refuse."""
+    if isinstance(schema, dict):
+        schema.pop("title", None)
+        for key, value in schema.items():
+            clean_schema(value)
+    elif isinstance(schema, list):
+        for item in schema:
+            clean_schema(item)
+    return schema
+# --------------------------------------
+
 def analyze_code(super_context, event_name):
     if not super_context or not super_context.strip():
         return None
@@ -30,7 +43,9 @@ def analyze_code(super_context, event_name):
     if event_name == "issues":
         task_description = "analyser cette nouvelle Issue, identifier les fichiers concernés, et proposer une résolution."
         
+    # On génère le schéma et on le nettoie de ses "title"
     raw_schema = ReviewReport.model_json_schema()
+    gemini_schema = clean_schema(raw_schema)
     
     response = client.models.generate_content(
         model='gemini-3.8-flash',
@@ -54,9 +69,8 @@ def analyze_code(super_context, event_name):
             6. FORMATAGE DES SUGGESTIONS (CRITIQUE) : Dans le champ "suggestion", tu dois fournir UNIQUEMENT LE CODE BRUT ou la commande exacte. N'utilise JAMAIS de balises Markdown (comme ```python) autour de la suggestion. Le champ doit contenir la chaîne brute.
             """,
             response_mime_type="application/json",
-            response_schema=raw_schema,
+            response_schema=gemini_schema,  # On passe le schéma nettoyé !
             temperature=0.2
         )
     )
-    # On renvoie la réponse ET les métadonnées de tokens
     return response.text, response.usage_metadata
