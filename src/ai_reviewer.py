@@ -35,6 +35,7 @@ def analyze_code(super_context, event_name):
                - MEDIUM : Code smell ou problème de maintenabilité.
                - LOW : Formatage ou bonnes pratiques.
             5. Pédagogie : Explique TOUJOURS *pourquoi* ton observation est un problème.
+            6. FORMATAGE DES SUGGESTIONS (CRITIQUE) : Dans le champ "suggestion", tu dois fournir UNIQUEMENT LE CODE BRUT ou la commande exacte. N'utilise JAMAIS de balises Markdown (comme ```python) autour de la suggestion. Le champ doit contenir la chaîne de caractères brute prête à être copiée-collée.
 
             Tu dois TOUJOURS répondre en JSON strict respectant cette structure exacte (adapte les champs si c'est une Issue) : 
             {{

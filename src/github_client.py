@@ -97,14 +97,11 @@ def post_github_comment(report: dict, event_name: str, event_data: dict) -> bool
             
             suggestion_text = (issue.get('suggestion') or '').strip()
             
-            if suggestion_text.startswith('```'):
-                lines = suggestion_text.split('\n')
-                if lines[0].startswith('```'): lines = lines[1:]
-                if lines and lines[-1].startswith('```'): lines = lines[:-1]
-                suggestion_text = '\n'.join(lines).strip()
+            # Nettoyage de sécurité : on supprime les balises Markdown si le LLM désobéit
+            suggestion_text = suggestion_text.replace('```python', '').replace('```text', '').replace('```', '').strip()
             
             if '\n' in suggestion_text:
-                markdown_body += f"- **Suggestion** :\n```text\n{suggestion_text}\n```\n\n"
+                markdown_body += f"- **Suggestion** :\n```python\n{suggestion_text}\n```\n\n"
             else:
                 markdown_body += f"- **Suggestion** : `{suggestion_text}`\n\n"
             
