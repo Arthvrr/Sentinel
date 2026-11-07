@@ -60,13 +60,17 @@ def post_github_comment(report: dict, event_name: str, event_data: dict, usage_m
         if not issue_number:
             print("❌ Numéro d'Issue ou de PR introuvable.")
             return False
-        url = f"[https://api.github.com/repos/](https://api.github.com/repos/){repo}/issues/{issue_number}/comments"
+            
+        # L'URL propre pour les PRs et Issues (Vérifie qu'il n'y a pas de crochets) :
+        url = f"https://api.github.com/repos/{repo}/issues/{issue_number}/comments"
     else:
         commit_sha = os.environ.get("GITHUB_SHA")
         if not commit_sha:
             print("❌ SHA du commit introuvable.")
             return False
-        url = f"[https://api.github.com/repos/](https://api.github.com/repos/){repo}/commits/{commit_sha}/comments"
+            
+        # L'URL propre pour les Commits (Vérifie qu'il n'y a pas de crochets) :
+        url = f"https://api.github.com/repos/{repo}/commits/{commit_sha}/comments"
 
     title = "🦅 Sentinel AI Code Review" if event_name != "issues" else "🦅 Sentinel AI Issue Triage"
     markdown_body = f"""## {title}\n\n> **Résumé :** {report.get('summary', 'Analyse terminée.')}\n\n"""
