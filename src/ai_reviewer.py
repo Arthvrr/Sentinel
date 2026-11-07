@@ -2,20 +2,36 @@ import os
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
+from pydantic import BaseModel, Field
+from typing import List, Optional
 
 load_dotenv()
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
+class Issue(BaseModel):
+    severity: str = 'low'
+    file: Optional[str] = Field(default=None, description="Le chemin relatif du fichier concerné (ex: src/main.py)")
+    line: Optional[int] = None
+    title: Optional[str] = 'Général'
+    type: Optional[str] = 'Général'
+    description: str
+    suggestion: str
+
+class ReviewReport(BaseModel):
+    summary: str
+    architecture_feedback: Optional[str] = None
+    issues: List[Issue] = Field(default_factory=list)
+
 def analyze_code(super_context, event_name):
-    """Envoie le contexte global à Gemini en adaptant le prompt selon l'événement."""
     if not super_context or not super_context.strip():
         return None
         
-    # Adaptation de la consigne selon l'événement GitHub
     task_description = "réaliser des Code Reviews exhaustives de ce nouveau code."
     if event_name == "issues":
-        task_description = "analyser cette nouvelle Issue (Bug report ou Feature request), identifier les fichiers concernés dans l'arborescence, et proposer une piste de résolution architecturale ou de code."
+        task_description = "analyser cette nouvelle Issue, identifier les fichiers concernés, et proposer une résolution."
         
+    raw_schema = ReviewReport.model_json_schema()
+    
     response = client.models.generate_content(
         model='gemini-3.8-flash',
         contents=f"Analyse l'intégralité du contexte suivant et accomplis ta tâche.\n\n{super_context}",
@@ -35,26 +51,12 @@ def analyze_code(super_context, event_name):
                - MEDIUM : Code smell ou problème de maintenabilité.
                - LOW : Formatage ou bonnes pratiques.
             5. Pédagogie : Explique TOUJOURS *pourquoi* ton observation est un problème.
-            6. FORMATAGE DES SUGGESTIONS (CRITIQUE) : Dans le champ "suggestion", tu dois fournir UNIQUEMENT LE CODE BRUT ou la commande exacte. N'utilise JAMAIS de balises Markdown (comme ```python) autour de la suggestion. Le champ doit contenir la chaîne de caractères brute prête à être copiée-collée.
-
-            Tu dois TOUJOURS répondre en JSON strict respectant cette structure exacte (adapte les champs si c'est une Issue) : 
-            {{
-            "summary": "Résumé analytique pointu (3-4 phrases).",
-            "architecture_feedback": "Analyse critique de l'impact architectural ou localisation probable du bug.",
-            "issues": [
-                {{
-                "severity": "critical|high|medium|low",
-                "line": 42,
-                "type": "Security|Performance|Architecture|Clean Code|Bug",
-                "title": "Titre explicite du problème ou de la solution",
-                "description": "Explication technique détaillée du problème ou de l'approche de résolution.",
-                "suggestion": "Le bloc de code exact, la commande, ou le design pattern recommandé pour résoudre le problème de manière optimale."
-                }}
-            ]
-            }}
+            6. FORMATAGE DES SUGGESTIONS (CRITIQUE) : Dans le champ "suggestion", tu dois fournir UNIQUEMENT LE CODE BRUT ou la commande exacte. N'utilise JAMAIS de balises Markdown (comme ```python) autour de la suggestion. Le champ doit contenir la chaîne brute.
             """,
             response_mime_type="application/json",
+            response_schema=raw_schema,
             temperature=0.2
         )
     )
-    return response.text
+    # On renvoie la réponse ET les métadonnées de tokens
+    return response.text, response.usage_metadata

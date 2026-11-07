@@ -5,3 +5,4 @@ src/*.pyc__pycache__/
 .DS_Store
 *.pem
 *.xcf
+suggestions.txt

@@ -44,7 +44,7 @@ def get_auth_token():
     print("❌ Aucune méthode d'authentification trouvée (ni App, ni Token).")
     return None
 
-def post_github_comment(report: dict, event_name: str, event_data: dict) -> bool:
+def post_github_comment(report: dict, event_name: str, event_data: dict, usage_metadata=None) -> bool:
     """Publie l'analyse de Sentinel sur l'Endpoint approprié (Commit, PR ou Issue)."""
     
     repo = os.environ.get("GITHUB_REPOSITORY") 
@@ -54,25 +54,20 @@ def post_github_comment(report: dict, event_name: str, event_data: dict) -> bool
         print("⚠️ Impossible de poster : informations système manquantes.")
         return False
 
-    # Détermination de l'URL cible selon l'événement
     url = ""
     if event_name in ("issues", "pull_request", "pull_request_target"):
-        # Pour les Issues et les PR, on poste sur l'endpoint des commentaires d'Issue (ID global)
         issue_number = event_data.get("issue", {}).get("number") or event_data.get("pull_request", {}).get("number") or event_data.get("number")
-        
         if not issue_number:
             print("❌ Numéro d'Issue ou de PR introuvable.")
             return False
-        url = f"https://api.github.com/repos/{repo}/issues/{issue_number}/comments"
+        url = f"[https://api.github.com/repos/](https://api.github.com/repos/){repo}/issues/{issue_number}/comments"
     else:
-        # Mode Push classique (Commits)
         commit_sha = os.environ.get("GITHUB_SHA")
         if not commit_sha:
             print("❌ SHA du commit introuvable.")
             return False
-        url = f"https://api.github.com/repos/{repo}/commits/{commit_sha}/comments"
+        url = f"[https://api.github.com/repos/](https://api.github.com/repos/){repo}/commits/{commit_sha}/comments"
 
-    # Construction du Markdown
     title = "🦅 Sentinel AI Code Review" if event_name != "issues" else "🦅 Sentinel AI Issue Triage"
     markdown_body = f"""## {title}\n\n> **Résumé :** {report.get('summary', 'Analyse terminée.')}\n\n"""
     
@@ -90,26 +85,43 @@ def post_github_comment(report: dict, event_name: str, event_data: dict) -> bool
             
             issue_title = issue.get('title') or issue.get('type') or 'Général'
             
-            # Formatage adapté si c'est une ligne de code ou juste une remarque globale (Issue)
+            # NOUVEAU : Affichage du fichier et de la ligne
+            file_info = f" (`{issue.get('file')}`)" if issue.get('file') else ""
             line_info = f" Ligne {issue.get('line')} -" if issue.get('line') else ""
-            markdown_body += f"#### {severity_icon} [{severity.upper()}]{line_info} {issue_title}\n"
+            
+            markdown_body += f"#### {severity_icon} [{severity.upper()}]{file_info}{line_info} {issue_title}\n"
             
             description = issue.get('description') or ''
             markdown_body += f"- **Description** : {description}\n"
             
             suggestion_text = (issue.get('suggestion') or '').strip()
             
-            # Nettoyage robuste : supprime l'ouverture (ex: ```python) et la fermeture (```) en périphérie
+            # Nettoyage robuste des éventuelles balises Markdown résiduelles
+            import re
             suggestion_text = re.sub(r'^```[a-zA-Z0-9_-]*\n?', '', suggestion_text)
             suggestion_text = re.sub(r'\n?```$', '', suggestion_text).strip()
             
             if '\n' in suggestion_text:
-                # On utilise un bloc vide pour éviter de forcer 'python' sur du YAML ou HTML
                 markdown_body += f"- **Suggestion** :\n```\n{suggestion_text}\n```\n\n"
             else:
                 markdown_body += f"- **Suggestion** : `{suggestion_text}`\n\n"
             
-    markdown_body += "---\n*🤖 Support généré automatiquement par **Sentinel** (Gemini 3.8 Flash).*"
+    # NOUVEAU : Calcul de la vraie facturation avec l'usage des tokens
+    if usage_metadata:
+        prompt_tokens = getattr(usage_metadata, 'prompt_token_count', 0)
+        candidate_tokens = getattr(usage_metadata, 'candidates_token_count', 0)
+        total_tokens = getattr(usage_metadata, 'total_token_count', 0)
+        
+        # Tarification estimée Gemini Flash (0.075$ / 1M input, 0.30$ / 1M output)
+        cost = (prompt_tokens / 1_000_000) * 0.075 + (candidate_tokens / 1_000_000) * 0.30
+        
+        markdown_body += f"---\n*🤖 Support généré automatiquement par **Sentinel** (Gemini 3.8 Flash).*\n"
+        markdown_body += f"*📊 Tokens utilisés : {total_tokens:,} ({prompt_tokens:,} in / {candidate_tokens:,} out) - 💰 Coût estimé : ${cost:.5f}*"
+    else:
+        markdown_body += "---\n*🤖 Support généré automatiquement par **Sentinel** (Gemini 3.8 Flash).*"
+
+    # Tronquage de sécurité GitHub (Max 65536 chars)
+    # [...] Reste de la fonction avec request.post(...)
 
     MAX_GITHUB_COMMENT_LENGTH = 65000
     if len(markdown_body) > MAX_GITHUB_COMMENT_LENGTH:
