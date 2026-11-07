@@ -2,6 +2,7 @@ import os
 import requests
 import time
 import jwt
+import re
 
 def get_auth_token():
     """Détermine dynamiquement la méthode d'authentification à utiliser."""
