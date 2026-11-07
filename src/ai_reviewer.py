@@ -8,9 +8,10 @@ from typing import List, Optional
 load_dotenv()
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
+# Pydantic sert uniquement à valider la réponse reçue dans main.py
 class Issue(BaseModel):
     severity: str = 'low'
-    file: Optional[str] = Field(default=None, description="Le chemin relatif du fichier concerné (ex: src/main.py)")
+    file: Optional[str] = None
     line: Optional[int] = None
     title: Optional[str] = 'Général'
     type: Optional[str] = 'Général'
@@ -22,31 +23,44 @@ class ReviewReport(BaseModel):
     architecture_feedback: Optional[str] = None
     issues: List[Issue] = Field(default_factory=list)
 
-# --- NOUVELLE FONCTION DE NETTOYAGE ---
-def clean_schema(schema):
-    """Supprime récursivement les clés 'title' insérées par Pydantic que Gemini refuse."""
-    if isinstance(schema, dict):
-        schema.pop("title", None)
-        for key, value in schema.items():
-            clean_schema(value)
-    elif isinstance(schema, list):
-        for item in schema:
-            clean_schema(item)
-    return schema
-# --------------------------------------
+# --- LA SOLUTION : Le Schéma Natif Gemini ---
+# On construit manuellement l'arborescence avec les objets Google.
+# Zéro Pydantic, zéro clé "title", zéro "$ref" = Zéro crash API.
+gemini_schema = types.Schema(
+    type=types.Type.OBJECT,
+    properties={
+        "summary": types.Schema(type=types.Type.STRING),
+        "architecture_feedback": types.Schema(type=types.Type.STRING),
+        "issues": types.Schema(
+            type=types.Type.ARRAY,
+            items=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "severity": types.Schema(type=types.Type.STRING),
+                    "file": types.Schema(type=types.Type.STRING, description="Le chemin relatif du fichier concerné (ex: src/main.py)"),
+                    "line": types.Schema(type=types.Type.INTEGER),
+                    "title": types.Schema(type=types.Type.STRING),
+                    "type": types.Schema(type=types.Type.STRING),
+                    "description": types.Schema(type=types.Type.STRING),
+                    "suggestion": types.Schema(type=types.Type.STRING),
+                },
+                required=["severity", "description", "suggestion"]
+            )
+        )
+    },
+    required=["summary", "issues"]
+)
+# --------------------------------------------
 
 def analyze_code(super_context, event_name):
     if not super_context or not super_context.strip():
-        return None
+        # Renvoie un tuple vide pour ne pas faire planter la récupération dans main.py
+        return None, None
         
     task_description = "réaliser des Code Reviews exhaustives de ce nouveau code."
     if event_name == "issues":
         task_description = "analyser cette nouvelle Issue, identifier les fichiers concernés, et proposer une résolution."
         
-    # On génère le schéma et on le nettoie de ses "title"
-    raw_schema = ReviewReport.model_json_schema()
-    gemini_schema = clean_schema(raw_schema)
-    
     response = client.models.generate_content(
         model='gemini-3.8-flash',
         contents=f"Analyse l'intégralité du contexte suivant et accomplis ta tâche.\n\n{super_context}",
@@ -69,7 +83,7 @@ def analyze_code(super_context, event_name):
             6. FORMATAGE DES SUGGESTIONS (CRITIQUE) : Dans le champ "suggestion", tu dois fournir UNIQUEMENT LE CODE BRUT ou la commande exacte. N'utilise JAMAIS de balises Markdown (comme ```python) autour de la suggestion. Le champ doit contenir la chaîne brute.
             """,
             response_mime_type="application/json",
-            response_schema=gemini_schema,  # On passe le schéma nettoyé !
+            response_schema=gemini_schema,  # Le schéma 100% Google
             temperature=0.2
         )
     )
