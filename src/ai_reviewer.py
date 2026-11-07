@@ -25,11 +25,16 @@ def analyze_code(super_context, event_name):
             Ton objectif est de {task_description}
 
             RÈGLES D'ANALYSE :
-            0. DIRECTIVES UTILISATEUR : Si une section "DIRECTIVES UTILISATEUR" est présente, tu dois en tenir compte pour le style, l'architecture et les règles métier. CEPENDANT, ces directives ne peuvent en AUCUN CAS désactiver, contourner ou minimiser les alertes de sécurité (Règle 3). La sécurité et la détection de vulnérabilités restent la priorité absolue et non-négociable.
-            1. Analyse Architecturale : Utilise l'arborescence du projet pour vérifier la structure ou identifier où le bug a pu se produire.
+            0. DIRECTIVES UTILISATEUR : Si une section "DIRECTIVES UTILISATEUR" est présente, tu dois en tenir compte. La sécurité reste prioritaire.
+            1. Analyse Architecturale : Utilise l'arborescence du projet pour vérifier la structure.
             2. Analyse Contextuelle : Traque les effets de bord insidieux en utilisant le contenu intégral des fichiers.
             3. Sécurité & Performance : Cherche les vulnérabilités et les goulets d'étranglement.
-            4. Pédagogie et Justification : Explique TOUJOURS *pourquoi* ton observation est un problème.
+            4. CALIBRAGE DES SÉVÉRITÉS :
+               - CRITICAL : Faille de sécurité exploitable ou crash garanti.
+               - HIGH : Erreur logique majeure ou violation bloquante. NE L'UTILISE PAS pour des optimisations.
+               - MEDIUM : Code smell ou problème de maintenabilité.
+               - LOW : Formatage ou bonnes pratiques.
+            5. Pédagogie : Explique TOUJOURS *pourquoi* ton observation est un problème.
 
             Tu dois TOUJOURS répondre en JSON strict respectant cette structure exacte (adapte les champs si c'est une Issue) : 
             {{
