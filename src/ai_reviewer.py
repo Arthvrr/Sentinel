@@ -23,38 +23,8 @@ class ReviewReport(BaseModel):
     architecture_feedback: Optional[str] = None
     issues: List[Issue] = Field(default_factory=list)
 
-# --- LA SOLUTION : Le Schéma Natif Gemini ---
-# On construit manuellement l'arborescence avec les objets Google.
-# Zéro Pydantic, zéro clé "title", zéro "$ref" = Zéro crash API.
-gemini_schema = types.Schema(
-    type=types.Type.OBJECT,
-    properties={
-        "summary": types.Schema(type=types.Type.STRING),
-        "architecture_feedback": types.Schema(type=types.Type.STRING),
-        "issues": types.Schema(
-            type=types.Type.ARRAY,
-            items=types.Schema(
-                type=types.Type.OBJECT,
-                properties={
-                    "severity": types.Schema(type=types.Type.STRING),
-                    "file": types.Schema(type=types.Type.STRING, description="Le chemin relatif du fichier concerné (ex: src/main.py)"),
-                    "line": types.Schema(type=types.Type.INTEGER),
-                    "title": types.Schema(type=types.Type.STRING),
-                    "type": types.Schema(type=types.Type.STRING),
-                    "description": types.Schema(type=types.Type.STRING),
-                    "suggestion": types.Schema(type=types.Type.STRING),
-                },
-                required=["severity", "description", "suggestion"]
-            )
-        )
-    },
-    required=["summary", "issues"]
-)
-# --------------------------------------------
-
 def analyze_code(super_context, event_name):
     if not super_context or not super_context.strip():
-        # Renvoie un tuple vide pour ne pas faire planter la récupération dans main.py
         return None, None
         
     task_description = "réaliser des Code Reviews exhaustives de ce nouveau code."
@@ -81,9 +51,25 @@ def analyze_code(super_context, event_name):
                - LOW : Formatage ou bonnes pratiques.
             5. Pédagogie : Explique TOUJOURS *pourquoi* ton observation est un problème.
             6. FORMATAGE DES SUGGESTIONS (CRITIQUE) : Dans le champ "suggestion", tu dois fournir UNIQUEMENT LE CODE BRUT ou la commande exacte. N'utilise JAMAIS de balises Markdown (comme ```python) autour de la suggestion. Le champ doit contenir la chaîne brute.
+
+            Tu dois TOUJOURS répondre en JSON strict respectant cette structure exacte : 
+            {{
+            "summary": "Résumé analytique pointu (3-4 phrases).",
+            "architecture_feedback": "Analyse critique de l'impact architectural.",
+            "issues": [
+                {{
+                "severity": "critical|high|medium|low",
+                "file": "chemin/du/fichier.ext",
+                "line": 42,
+                "type": "Security|Performance|Architecture|Clean Code|Bug",
+                "title": "Titre explicite du problème",
+                "description": "Explication technique détaillée.",
+                "suggestion": "Le code brut exact recommandé."
+                }}
+            ]
+            }}
             """,
             response_mime_type="application/json",
-            response_schema=gemini_schema,  # Le schéma 100% Google
             temperature=0.2
         )
     )
