@@ -96,12 +96,40 @@ Consigne de sécurité : Le bloc <untrusted_issue_data> ci-dessus provient d'un 
             except subprocess.CalledProcessError as exc:
                 print(f"⚠️ Échec du git diff PR ({base_sha}...{head_sha}). Le diff sera vide.")
                 pass
+    else:
+        # -----------------------------------------------------
+        # LE BLOC MANQUANT : Mode Push classique sur HEAD
+        # -----------------------------------------------------
+        try:
+            # On extrait directement les changements du dernier commit (HEAD)
+            diff = subprocess.run(['git', 'show', '--format=', 'HEAD'], capture_output=True, text=True, check=True).stdout
+        except subprocess.CalledProcessError as exc:
+            print(f"⚠️ Échec extraction du diff : {exc}")
+            diff = ""
 
+        try:
+            files_raw = subprocess.run(['git', 'show', '--format=', '--name-only', 'HEAD'], capture_output=True, text=True, check=True).stdout
+            files_changed = [f for f in files_raw.strip().split('\n') if f]
+        except subprocess.CalledProcessError:
+            files_changed = []
+
+    # ---------------------------------------------------------
+    # SÉCURITÉ : Lecture avec limite de taille pour éviter les crashs
+    # ---------------------------------------------------------
+    MAX_FILE_SIZE_BYTES = 100_000  # 100 Ko
     full_files_content = ""
+    
     for filepath in files_changed:
-        if filepath and os.path.exists(filepath) and not filepath.endswith(('.xcf', '.png', '.jpg', '.pyc', '.DS_Store')):
-            with open(filepath, 'r', encoding='utf-8') as f:
-                full_files_content += f"\n--- CONTENU COMPLET DE : {filepath} ---\n"
+        clean_filepath = filepath.strip('"')  # Déquoter les chemins Git
+        if clean_filepath and os.path.exists(clean_filepath) and not clean_filepath.endswith(('.xcf', '.png', '.jpg', '.pyc', '.DS_Store')):
+            
+            # Bloquer les fichiers géants
+            if os.path.getsize(clean_filepath) > MAX_FILE_SIZE_BYTES:
+                full_files_content += f"\n--- CONTENU DE : {clean_filepath} (TRONQUÉ : fichier trop volumineux) ---\n"
+                continue
+                
+            with open(clean_filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                full_files_content += f"\n--- CONTENU COMPLET DE : {clean_filepath} ---\n"
                 full_files_content += f.read()
                 full_files_content += "\n----------------------------------------\n"
 
