@@ -89,7 +89,7 @@ def post_commit_comment(report: dict) -> bool:
             
     markdown_body += "---\n*🤖 Code review générée automatiquement par **Sentinel** (Gemini 3.8 Flash).*"
 
-    url = f"[https://api.github.com/repos/](https://api.github.com/repos/){repo}/commits/{commit_sha}/comments"
+    url = f"https://api.github.com/repos/{repo}/commits/{commit_sha}/comments"
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github.v3+json"
