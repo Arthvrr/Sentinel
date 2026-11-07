@@ -97,7 +97,7 @@ def post_commit_comment(report: dict) -> bool:
     if len(markdown_body) > MAX_GITHUB_COMMENT_LENGTH:
         markdown_body = markdown_body[:MAX_GITHUB_COMMENT_LENGTH] + "\n\n⚠️ *[Commentaire tronqué : volume maximal autorisé par GitHub (65536 octets) atteint]*"
 
-    url = f"[https://api.github.com/repos/](https://api.github.com/repos/){repo}/commits/{commit_sha}/comments"
+    url = f"https://api.github.com/repos/{repo}/commits/{commit_sha}/comments"
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github.v3+json"
