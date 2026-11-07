@@ -6,14 +6,18 @@ branding:
 
 inputs:
   gemini_api_key:
-    description: 'La clé API Google Gemini'
+    description: 'La clé API Google Gemini (BYOK)'
     required: true
+  github_token:
+    description: 'Le token d authentification standard de GitHub'
+    required: false
+    default: ${{ github.token }}
   sentinel_app_id:
-    description: 'L ID de la GitHub App'
-    required: true
+    description: 'Usage interne uniquement'
+    required: false
   sentinel_private_key:
-    description: 'La clé privée de la GitHub App'
-    required: true
+    description: 'Usage interne uniquement'
+    required: false
 
 runs:
   using: 'composite'
@@ -24,16 +28,14 @@ runs:
         python-version: '3.13'
     
     - name: Install dependencies
-      # Installation des librairies requises par ton script Python
       run: pip install google-genai requests PyJWT cryptography pydantic==2.9.2 python-dotenv
       shell: bash
 
     - name: Run Sentinel Analysis
       env:
-        # Transfert des variables d'environnement vers le script Python
         GEMINI_API_KEY: ${{ inputs.gemini_api_key }}
+        GITHUB_TOKEN: ${{ inputs.github_token }}
         SENTINEL_APP_ID: ${{ inputs.sentinel_app_id }}
         SENTINEL_PRIVATE_KEY: ${{ inputs.sentinel_private_key }}
-      # Exécution du script main.py situé dans le dépôt Sentinel
       run: python ${{ github.action_path }}/src/main.py
       shell: bash
