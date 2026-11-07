@@ -11,7 +11,6 @@ def get_auth_token():
     github_token = os.environ.get("GITHUB_TOKEN")
     repo = os.environ.get("GITHUB_REPOSITORY") 
 
-    # MODE 1 : Propriétaire (Avec le logo Sentinel, pour tes propres projets)
     if app_id and private_key_pem and repo:
         now = int(time.time())
         payload = {
@@ -38,25 +37,42 @@ def get_auth_token():
         except Exception as e:
             print(f"⚠️ Échec du mode Propriétaire : {e}")
 
-    # MODE 2 : Public / Open-Source (Sécurisé, utilise github-actions[bot])
     if github_token:
         return github_token
 
     print("❌ Aucune méthode d'authentification trouvée (ni App, ni Token).")
     return None
 
-def post_commit_comment(report: dict) -> bool:
-    """Publie l'analyse de Sentinel en tant que commentaire sur le commit."""
+def post_github_comment(report: dict, event_name: str, event_data: dict) -> bool:
+    """Publie l'analyse de Sentinel sur l'Endpoint approprié (Commit, PR ou Issue)."""
     
     repo = os.environ.get("GITHUB_REPOSITORY") 
-    commit_sha = os.environ.get("GITHUB_SHA")
     token = get_auth_token()
     
-    if not all([token, repo, commit_sha]):
-        print("⚠️ Impossible de poster : informations ou token manquants.")
+    if not all([token, repo]):
+        print("⚠️ Impossible de poster : informations système manquantes.")
         return False
 
-    markdown_body = f"""## 🦅 Sentinel AI Code Review\n\n> **Résumé :** {report.get('summary', 'Analyse terminée.')}\n\n"""
+    # Détermination de l'URL cible selon l'événement
+    url = ""
+    if event_name == "issues" or (event_name == "pull_request" and "pull_request" in event_data):
+        # Pour les Issues et les PR, on poste sur l'endpoint des commentaires d'Issue (ID global)
+        issue_number = event_data.get("issue", {}).get("number") or event_data.get("pull_request", {}).get("number")
+        if not issue_number:
+            print("❌ Numéro d'Issue ou de PR introuvable.")
+            return False
+        url = f"https://api.github.com/repos/{repo}/issues/{issue_number}/comments"
+    else:
+        # Mode Push classique (Commits)
+        commit_sha = os.environ.get("GITHUB_SHA")
+        if not commit_sha:
+            print("❌ SHA du commit introuvable.")
+            return False
+        url = f"https://api.github.com/repos/{repo}/commits/{commit_sha}/comments"
+
+    # Construction du Markdown
+    title = "🦅 Sentinel AI Code Review" if event_name != "issues" else "🦅 Sentinel AI Issue Triage"
+    markdown_body = f"""## {title}\n\n> **Résumé :** {report.get('summary', 'Analyse terminée.')}\n\n"""
     
     if 'architecture_feedback' in report and report['architecture_feedback']:
         markdown_body += f"### 🏛️ Feedback Architecture\n{report['architecture_feedback']}\n\n"
@@ -70,13 +86,15 @@ def post_commit_comment(report: dict) -> bool:
             severity = (issue.get('severity') or 'low').lower()
             severity_icon = "🚨" if severity == "critical" else "🔴" if severity == "high" else "🟠" if severity == "medium" else "🔵"
             
-            title = issue.get('title') or issue.get('type') or 'Général'
-            markdown_body += f"#### {severity_icon} [{severity.upper()}] Ligne {issue.get('line', 'N/A')} - {title}\n"
+            issue_title = issue.get('title') or issue.get('type') or 'Général'
+            
+            # Formatage adapté si c'est une ligne de code ou juste une remarque globale (Issue)
+            line_info = f" Ligne {issue.get('line')} -" if issue.get('line') else ""
+            markdown_body += f"#### {severity_icon} [{severity.upper()}]{line_info} {issue_title}\n"
             
             description = issue.get('description') or ''
             markdown_body += f"- **Description** : {description}\n"
             
-            # Correction de l'AttributeError potentiel (NoneType)
             suggestion_text = (issue.get('suggestion') or '').strip()
             
             if suggestion_text.startswith('```'):
@@ -90,25 +108,25 @@ def post_commit_comment(report: dict) -> bool:
             else:
                 markdown_body += f"- **Suggestion** : `{suggestion_text}`\n\n"
             
-    markdown_body += "---\n*🤖 Code review générée automatiquement par **Sentinel** (Gemini 3.8 Flash).*"
+    markdown_body += "---\n*🤖 Support généré automatiquement par **Sentinel** (Gemini 3.8 Flash).*"
 
-    # Tronquer le commentaire si la limite de l'API GitHub est atteinte
     MAX_GITHUB_COMMENT_LENGTH = 65000
     if len(markdown_body) > MAX_GITHUB_COMMENT_LENGTH:
-        markdown_body = markdown_body[:MAX_GITHUB_COMMENT_LENGTH] + "\n\n⚠️ *[Commentaire tronqué : volume maximal autorisé par GitHub (65536 octets) atteint]*"
+        truncated = markdown_body[:MAX_GITHUB_COMMENT_LENGTH]
+        if truncated.count('```') % 2 != 0:
+            truncated += '\n```'
+        markdown_body = truncated + '\n\n⚠️ *[Commentaire tronqué : volume maximal autorisé par GitHub atteint]*'
 
-    url = f"https://api.github.com/repos/{repo}/commits/{commit_sha}/comments"
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github.v3+json"
     }
     data = {"body": markdown_body}
 
-    # Sécurisation des appels réseau avec try/except
     try:
         response = requests.post(url, headers=headers, json=data, timeout=10)
         if response.status_code == 201:
-            print(f"✅ Commentaire publié avec succès sur le commit {commit_sha[:7]} !")
+            print(f"✅ Commentaire publié avec succès ({event_name}) !")
             return True
         else:
             print(f"❌ Erreur lors de la publication : {response.status_code}\n{response.text}")

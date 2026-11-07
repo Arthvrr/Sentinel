@@ -1,5 +1,6 @@
 import subprocess
 import os
+import json
 
 def generate_project_tree(startpath='.', exclude_dirs={'.git', '__pycache__', 'venv', '.venv', 'node_modules', 'build', '.build'}):
     """Dessine l'arborescence du projet pour que Gemini comprenne la structure."""
@@ -21,9 +22,17 @@ def generate_project_tree(startpath='.', exclude_dirs={'.git', '__pycache__', 'v
     return tree_str
 
 def get_context_for_gemini():
-    """Récupère l'arbre du projet, les règles utilisateur, le diff, et le code source."""
+    """Récupère le contexte adapté : Diff de Commit, Diff de PR, ou Texte de l'Issue."""
     
-    # 1. Obtenir l'arborescence du projet
+    event_name = os.environ.get("GITHUB_EVENT_NAME", "push")
+    event_path = os.environ.get("GITHUB_EVENT_PATH")
+    
+    # 1. Charger le payload JSON de l'événement GitHub
+    event_data = {}
+    if event_path and os.path.exists(event_path):
+        with open(event_path, 'r', encoding='utf-8') as f:
+            event_data = json.load(f)
+
     project_tree = generate_project_tree()
 
     # 2. Chercher les instructions personnalisées de l'utilisateur
@@ -35,20 +44,52 @@ def get_context_for_gemini():
             if content:
                 custom_rules = f"\n## DIRECTIVES UTILISATEUR (PRIORITÉ ABSOLUE)\n{content}\n"
 
-    # 3. Obtenir le Git Diff
-    try:
-        diff = subprocess.run(['git', 'diff', 'HEAD~1', 'HEAD'], capture_output=True, text=True, check=True).stdout
-    except subprocess.CalledProcessError:
-         return None
+    # ---------------------------------------------------------
+    # SCÉNARIO 1 : C'EST UNE ISSUE (Pas de code modifié)
+    # ---------------------------------------------------------
+    if event_name == "issues":
+        issue_title = event_data.get("issue", {}).get("title", "Titre inconnu")
+        issue_body = event_data.get("issue", {}).get("body", "Aucune description.")
+        
+        super_context = f"""
+{custom_rules}
+## ARCHITECTURE GLOBALE DU PROJET
+{project_tree}
 
-    # 4. Trouver les fichiers modifiés
-    try:
-        files_changed_raw = subprocess.run(['git', 'diff', '--name-only', 'HEAD~1', 'HEAD'], capture_output=True, text=True, check=True).stdout
-        files_changed = files_changed_raw.strip().split('\n')
-    except subprocess.CalledProcessError:
-        files_changed = []
+## NOUVELLE ISSUE SIGNALÉE
+Titre : {issue_title}
+Description : {issue_body}
+"""
+        # On retourne le contexte, le type d'événement, et les données brutes
+        return super_context, event_name, event_data
 
-    # 5. Lire le contenu complet de ces fichiers modifiés
+    # ---------------------------------------------------------
+    # SCÉNARIO 2 : PULL REQUEST OU PUSH (Code modifié)
+    # ---------------------------------------------------------
+    diff = ""
+    files_changed = []
+    
+    if event_name == "pull_request":
+        # Extraire les SHAs de la branche source et cible de la PR
+        base_sha = event_data.get("pull_request", {}).get("base", {}).get("sha")
+        head_sha = event_data.get("pull_request", {}).get("head", {}).get("sha")
+        
+        if base_sha and head_sha:
+            try:
+                diff = subprocess.run(['git', 'diff', base_sha, head_sha], capture_output=True, text=True, check=True).stdout
+                files_changed_raw = subprocess.run(['git', 'diff', '--name-only', base_sha, head_sha], capture_output=True, text=True, check=True).stdout
+                files_changed = files_changed_raw.strip().split('\n')
+            except subprocess.CalledProcessError:
+                pass
+    else:
+        # Mode Push classique
+        try:
+            diff = subprocess.run(['git', 'diff', 'HEAD~1', 'HEAD'], capture_output=True, text=True, check=True).stdout
+            files_changed_raw = subprocess.run(['git', 'diff', '--name-only', 'HEAD~1', 'HEAD'], capture_output=True, text=True, check=True).stdout
+            files_changed = files_changed_raw.strip().split('\n')
+        except subprocess.CalledProcessError:
+            pass
+
     full_files_content = ""
     for filepath in files_changed:
         if filepath and os.path.exists(filepath) and not filepath.endswith(('.xcf', '.png', '.jpg', '.pyc', '.DS_Store')):
@@ -57,7 +98,6 @@ def get_context_for_gemini():
                 full_files_content += f.read()
                 full_files_content += "\n----------------------------------------\n"
 
-    # 6. Le Super Prompt (Contexte ultime avec les règles utilisateur en premier)
     super_context = f"""
 {custom_rules}
 ## ARCHITECTURE GLOBALE DU PROJET
@@ -66,7 +106,7 @@ def get_context_for_gemini():
 ## FICHIERS MODIFIÉS (Contexte complet)
 {full_files_content}
 
-## GIT DIFF (Les changements exacts de ce commit)
+## GIT DIFF (Changements introduits)
 {diff}
 """
-    return super_context
+    return super_context, event_name, event_data
