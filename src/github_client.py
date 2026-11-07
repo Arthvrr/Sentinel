@@ -97,11 +97,13 @@ def post_github_comment(report: dict, event_name: str, event_data: dict) -> bool
             
             suggestion_text = (issue.get('suggestion') or '').strip()
             
-            # Nettoyage de sécurité : on supprime les balises Markdown si le LLM désobéit
-            suggestion_text = suggestion_text.replace('```python', '').replace('```text', '').replace('```', '').strip()
+            # Nettoyage robuste : supprime l'ouverture (ex: ```python) et la fermeture (```) en périphérie
+            suggestion_text = re.sub(r'^```[a-zA-Z0-9_-]*\n?', '', suggestion_text)
+            suggestion_text = re.sub(r'\n?```$', '', suggestion_text).strip()
             
             if '\n' in suggestion_text:
-                markdown_body += f"- **Suggestion** :\n```python\n{suggestion_text}\n```\n\n"
+                # On utilise un bloc vide pour éviter de forcer 'python' sur du YAML ou HTML
+                markdown_body += f"- **Suggestion** :\n```\n{suggestion_text}\n```\n\n"
             else:
                 markdown_body += f"- **Suggestion** : `{suggestion_text}`\n\n"
             
